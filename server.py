@@ -2,12 +2,17 @@ import requests
 from flask import Flask
 from flask import request
 from flask import abort
+from flask import make_response
+from flask_caching import Cache
 import xml.etree.ElementTree as ET
 
+cache = Cache(config={"CACHE_TYPE": "SimpleCache"})
 app = Flask(__name__)
+cache.init_app(app)
 
 
-def get_breeze(url, username, password):
+@cache.memoize(120)
+def get_breeze(url, username, password) -> str:
     req = requests.get(f"{url}/api/xml?action=login&login={username}&password={password}")
     return req.cookies.get("BREEZESESSION")
 
@@ -16,6 +21,7 @@ def logout(url, breeze):
     requests.get(f"{url}/api/xml?action=logout&session={breeze}")
 
 
+@cache.memoize(600)
 def get_meetings(url, breeze) -> list:
     req = requests.get(
             f"{url}/api/xml?action=report-my-meetings&session={breeze}",
@@ -31,6 +37,7 @@ def get_meetings(url, breeze) -> list:
     return meetings
 
 
+@cache.memoize(300)
 def get_recordings(url, sco_id, breeze) -> list:
     req = requests.get(
             f"{url}/api/xml?action=list-recordings&folder-id={sco_id}&session={breeze}",
@@ -47,8 +54,15 @@ def get_recordings(url, sco_id, breeze) -> list:
     return recordings
 
 
-@app.route("/moomoo.mrcow", methods=("POST", ))
+@app.route("/moomoo.mrcow", methods=("POST", "OPTIONS"))
 def recordings_list():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
+
     if not request.is_json:
         abort(404)
     data = dict()
@@ -57,7 +71,9 @@ def recordings_list():
     password = request.json["password"]
     breeze = get_breeze(url, username, password)
     if breeze is None:
-        return {"error": "Error logging in"}
+        abort(403)
     for meeting in get_meetings(url, breeze):
         data[meeting["name"]] = get_recordings(url, meeting["sco-id"], breeze)
-    return data
+    response = make_response(data)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
