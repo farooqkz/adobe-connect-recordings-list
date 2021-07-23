@@ -25,6 +25,14 @@ class App extends React.Component {
       this.setState({ open: true });
     }
   };
+  
+  handleLogout = () => {
+    localforage.setItem("info", null).then(() => {
+      alert("Logged out successfully");
+      // eslint-disable-next-line no-self-assign
+      window.location = window.location;
+    });
+  };
 
   handleLogin = () => {
     let url = this.state.url;
@@ -127,7 +135,8 @@ class App extends React.Component {
 
   render() {
     if (this.state.gotData) {
-      return (
+      return (<>
+        <Button variant="contained" onClick={this.handleLogout}>Log out</Button>
           <MUIDataTable
             title={"Recordings"}
             data={this.data}
@@ -159,7 +168,7 @@ class App extends React.Component {
               },
             ]}
             options={{ selectableRows: "none" }}
-          />
+          /></>
       );
     }
     if (this.state.shouldLogin) {
